@@ -6,7 +6,7 @@ from ultralytics import YOLO
 
 
 class WeaponDetection:
-    def __init__(self, model_path=None, confidence_threshold=0.5):
+    def __init__(self, model_path='yolov8n.pt', confidence_threshold=0.5):
         self.confidence_threshold = confidence_threshold
 
         # Initialize YOLOv5 model
@@ -15,7 +15,7 @@ class WeaponDetection:
         else:
             # Use the recommended YOLOv5su model
             try:
-                self.model = YOLO("yolov5su.pt")
+                self.model = YOLO('yolov8n.pt')
                 print("Using YOLOv5su model as recommended for better performance")
             except Exception as e:
                 print(f"Could not load YOLOv5su model: {str(e)}. Falling back to YOLOv5s.")
@@ -52,7 +52,7 @@ class WeaponDetection:
         """Draw bounding boxes for detected weapons."""
         for x1, y1, x2, y2, cls_id, conf in detections:
             # Draw bounding box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (147, 112, 219), 2)
 
             # Get class name
             cls_name = self.model.names[cls_id]

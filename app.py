@@ -7,7 +7,10 @@ import numpy as np
 from PIL import Image
 from pathlib import Path
 import datetime
-
+import atexit
+from modules.face_recognition import FaceRecognition
+from modules.motion_detection import MotionDetector
+from modules.aggression_detector import detect_aggression
 
 # Import only the essential modules
 from modules.weapon_detection import WeaponDetection
@@ -27,8 +30,6 @@ if 'current_frame' not in st.session_state:
 # Initialize modules
 weapon_detector = WeaponDetection()
 db = SecurityDatabase()
-
-
 # Helper functions
 def convert_to_rgb(frame):
     """Convert a frame from BGR to RGB."""
@@ -52,14 +53,14 @@ def save_frame(frame, directory="data/captured_frames"):
 
 
 # Application title
-st.title("AI Security System - Weapon Detection")
+st.title("AI Security System")
 
 # Create tabs for different functionalities
 tab1, tab2 = st.tabs(["Security Monitor", "Security Logs"])
 
 with tab1:
     # Security monitor tab
-    st.header("Live Security Monitoring")
+    st.header("Live Weapon Detection")
 
     # Camera control buttons
     col1, col2, col3 = st.columns(3)
@@ -212,5 +213,146 @@ with tab2:
         st.info("No security events found in the selected date range")
 
 # Add a footer
+# Face detection toggle
+# Face detection toggle and camera handling section
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.subheader("🔍 Face Detection")
+
+if "face_detection_active" not in st.session_state:
+    st.session_state.face_detection_active = False
+
+# Face detection button placed at the top with other camera buttons
+if col1.button("Face Detection"):
+    st.session_state.face_detection_active = not st.session_state.face_detection_active
+
+# Placeholder for face feed
+face_frame_placeholder = st.empty()
+
+# Initialize face recognition system
+face_recog = FaceRecognition()
+
+
+if st.session_state.face_detection_active:
+    # Separate camera handling for face detection
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    while st.session_state.face_detection_active:
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Failed to capture video feed 😞")
+            break
+
+        # Detect faces and get authorization status
+        face_locations, face_names, face_authorized = face_recog.recognize_faces(frame)
+
+        for (top, right, bottom, left), name, auth in zip(face_locations, face_names, face_authorized):
+            label = f"{'✅ Authorized' if auth else '❌ Unauthorized'}: {name}"
+            color = (0, 255, 0) if auth else (0, 0, 255)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+            cv2.putText(frame, label, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+        # Display the frame
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_frame_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
+
+        # Tiny delay to prevent CPU overuse
+        time.sleep(0.05)
+
+    cap.release()
+    st.success("Face detection stopped 💖")
+
+
+menu = st.sidebar.selectbox("Choose Module", ["Home", "Motion Detector"])
+
+if menu == "Motion Detector":
+    st.header("🚨 Motion Detection")
+
+    # Checkbox to start or stop the camera
+    run = st.checkbox("Start Camera")
+
+    # Initialize the motion detector (you can replace it with your custom PoseDetector if needed)
+    motion_detector = MotionDetector()
+    FRAME_WINDOW = st.image([])  # Placeholder for displaying frames
+
+    cap = cv2.VideoCapture(0)  # Access the webcam
+
+    if run:
+        st.write("Motion detection is ON. Wait for any significant movement...")
+
+        while run:
+            ret, frame = cap.read()
+            if not ret:
+                st.warning("Camera not accessible.")
+                break
+
+            # Call the detect_motion function from MotionDetector class
+            motion_detected, frame = motion_detector.detect_motion(frame)
+
+            if motion_detected:
+                st.error("🚨 Motion Detected!")  # Display message if motion is detected
+
+            # Convert and display frame
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            FRAME_WINDOW.image(frame_rgb)
+
+            time.sleep(0.03)  # Adjust for better performance and camera handling
+
+        cap.release()
+    else:
+        st.write("Camera is off.")
+
+menu = st.sidebar.selectbox("Choose Module", ["Home", "Aggressive Behavior Recognition"])
+
+# Home Page
+if menu == "Home":
+    st.title("📊 Welcome to the Smart Surveillance Dashboard")
+    st.write("Select a module from the sidebar to get started.")
+
+# Aggression Detection Module
+elif menu == "Aggressive Behavior Recognition":
+    st.header("🧠 Aggressive Behavior Recognition")
+
+    video_file = st.file_uploader("Upload a video", type=["mp4", "avi", "mov"])
+# Checkbox to enable aggression detection
+    enable_detection = st.checkbox("Enable Aggressive Behavior Recognition")
+
+    if video_file is not None and enable_detection:
+
+        tfile = tempfile.NamedTemporaryFile(delete=False)
+        tfile.write(video_file.read())
+
+        st.info("Processing video... Please wait ⏳")
+
+    # Run detection from aggression_detector.py
+        output_path, status_log = detect_aggression(tfile.name)
+
+        st.video(output_path)
+
+    # Show status messages from detection
+        st.subheader("Detection Summary:")
+        for status in status_log:
+            st.write(status)
+
+    # Download link
+        with open(output_path, "rb") as file:
+            btn = st.download_button(
+                label="Download Annotated Video",
+                data=file,
+                file_name="annotated_output.mp4",
+                mime="video/mp4"
+        )
+
+        time.sleep(1)
+
+
+        def delete_temp_file(file_path):
+            os.remove(file_path)
+
+        atexit.register(delete_temp_file, tfile.name)
+
 st.markdown("---")
 st.markdown("AI Security System © 2025")
