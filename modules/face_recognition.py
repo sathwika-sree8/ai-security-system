@@ -1,71 +1,70 @@
+import os
 import cv2
+import face_recognition
 import numpy as np
-from keras_facenet import FaceNet
-from mtcnn import MTCNN
 
 class FaceRecognition:
-    def __init__(self):
-        self.embedder = FaceNet()
-        self.known_faces = {}  # {name: embedding}
-        self.detector = MTCNN()
+    def __init__(self, known_faces_dir='data/known_faces', tolerance=0.5):
+        """
+        Initialize FaceRecognition class by loading known faces.
 
-    def get_face_embedding(self, image):
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        detections = self.detector.detect_faces(rgb_image)
+        Args:
+            known_faces_dir (str): Directory path with known face images.
+            tolerance (float): Distance tolerance for face matching.
+        """
+        self.known_encodings = []
+        self.known_names = []
+        self.tolerance = tolerance
+        self.load_known_faces(known_faces_dir)
 
-        if len(detections) == 0:
-            return None, None
+    def load_known_faces(self, known_faces_dir):
+        """
+        Load known faces and their encodings from the specified directory.
+        """
+        for filename in os.listdir(known_faces_dir):
+            if filename.endswith(('.jpg', '.jpeg', '.png')):
+                image_path = os.path.join(known_faces_dir, filename)
+                image = face_recognition.load_image_file(image_path)
+                encodings = face_recognition.face_encodings(image)
+                if encodings:
+                    self.known_encodings.append(encodings[0])
+                    self.known_names.append(os.path.splitext(filename)[0])
+                else:
+                    print(f"No face found in {filename}, skipping.")
 
-        embeddings = []
-        face_locations = []
+    def recognize_faces(self, frame):
+        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        rgb_small_frame = small_frame[:, :, ::-1]
 
-        for det in detections:
-            x, y, w, h = det['box']
-            x, y = max(0, x), max(0, y)
-            face = image[y:y+h, x:x+w]
-
-            if face.shape[0] < 50 or face.shape[1] < 50:
-                continue  # Ignore too small faces
-
-            face = cv2.resize(face, (160, 160))
-            face_rgb = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
-            embedding = self.embedder.embeddings([face_rgb])[0]
-
-            embeddings.append(embedding)
-            face_locations.append((y, x + w, y + h, x))  # (top, right, bottom, left)
-
-        return face_locations, embeddings
-
-    def add_known_face(self, name, image):
-        face_locations, embeddings = self.get_face_embedding(image)
-        if face_locations and embeddings:
-            self.known_faces.setdefault(name, []).append(embeddings)
-            # Assuming one face per image
-            return True
-        return False
-
-    def recognize_faces(self, image, threshold=0.6):
-        face_locations, embeddings = self.get_face_embedding(image)
-        if not embeddings:
-            return [], [], []
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
         face_names = []
         face_authorized = []
 
-        for embedding in embeddings:
-            identity = "Unknown"
+        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+            matches = face_recognition.compare_faces(self.known_encodings, face_encoding, tolerance=self.tolerance)
+            name = "Unauthorized"
             authorized = False
-            min_dist = float('inf')
 
-            for name, embeddings_list in self.known_faces.items():
-                for known_embedding in embeddings_list:
-                    dist = np.linalg.norm(embedding - known_embedding)
-                    if dist < min_dist and dist < threshold:
-                        min_dist = dist
-                        identity = name
-                        authorized = True
+            if True in matches:
+                first_match_index = matches.index(True)
+                name = self.known_names[first_match_index]
+                authorized = True
 
-            face_names.append(identity)
+            face_names.append(name)
             face_authorized.append(authorized)
 
-        return face_locations, face_names, face_authorized
+            # Scale back up
+            top *= 4
+            right *= 4
+            bottom *= 4
+            left *= 4
+
+            color = (0, 255, 0) if name != "Unauthorized" else (0, 0, 255)
+            cv2.rectangle(frame, (left, top), (right, bottom), color, 3)
+            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
+            cv2.putText(frame, name, (left + 6, bottom - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+        return face_locations, face_names, face_authorized  # ✅ Returns 3 values

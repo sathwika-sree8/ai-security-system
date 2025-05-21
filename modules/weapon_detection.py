@@ -6,7 +6,7 @@ from ultralytics import YOLO
 
 
 class WeaponDetection:
-    def __init__(self, model_path='yolov8n.pt', confidence_threshold=0.5):
+    def __init__(self, model_path='yolov8s.pt', confidence_threshold=0.5):
         self.confidence_threshold = confidence_threshold
 
         # Initialize YOLOv5 model
