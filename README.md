@@ -3,7 +3,7 @@
 An intelligent, real-time security solution that detects **faces**, **weapons**, and **aggression** in video streams.  
 Built using **Python**, **OpenCV**, **Deep Learning**, and a **Streamlit** interface for easy access to logs and tools.  
 
-![Streamlit Screenshot](https://github.com/sathwika-sree8/ai-security-system/assets/your-image-id) <!-- Optional: Add a screenshot link here -->
+![Streamlit Screenshot](https://github.com/sathwika-sree8/ai-security-system/assets/your-image-id) <"C:\Users\SATHWIKA\OneDrive\Desktop\ai security system\images\Screenshot 2025-05-21 134253.png">
 
 ---
 
